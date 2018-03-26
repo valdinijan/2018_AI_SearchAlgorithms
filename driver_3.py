@@ -20,7 +20,7 @@ class Move:
 
 class Fringe:
     def __init__(self):
-        self.fringeDict = {}
+        self.dict = {}
     def push(self, item):
         pass
     def pop(self):
@@ -31,11 +31,19 @@ class Queue(Fringe):
         super().__init__()
         self.items = []
     def push(self, item):
-        self.fringeDict[item.board.key] = 1
-        self.items.insert(0,item)
+        self.dict[item.board.key] = True
+        self.items.insert(0, item)
+        print("Push: ", item.board.key, id(item))
+        print("Fringe contents after push: ")
+        for x in self.items:
+            print(x.board)
     def pop(self):
+        print("Fringe contents before pop: ")
+        for x in self.items:
+            print(x.board.key)
         item = self.items.pop()
-        del self.fringeDict[item.board.key]
+        del self.dict[item.board.key]
+        print("Pop: ", item.board.key)
         return item
     def isEmpty(self):
         return self.items == []
@@ -65,7 +73,6 @@ class Board:
                 return False
         return True
     def move(self, dir):
-        print(self.key)
         idxZ = self.state.index(0)
         if dir == Move.UP:
             if idxZ >= 3:
@@ -140,50 +147,53 @@ class Solver(State):
 
     def __init__(self, algType, startNode):
         super().__init__(algType, startNode)
+    def tryAddToFringe(self, currNode, move):
+        newNode = Node(currNode.board)
+        if newNode.board.move(move) == True:
+            if not (newNode.board.key in self.fringe.dict) and\
+               not (newNode.board.key in self.explored):
+                print("New node: ", newNode.board.key)
+                self.fringe.push(newNode)
+                # print(newNode.board.key, "added to fringe")
+
     def expand(self, currNode):
         if self.algType == 'bfs':
             # push children in UDLR order
-            newNode = Node(currNode.board)
-            if newNode.board.move(Move.UP) == True:
-                self.fringe.push(newNode)
-            if newNode.board.move(Move.DOWN) == True:
-                self.fringe.push(newNode)
-            if newNode.board.move(Move.LEFT) == True:
-                self.fringe.push(newNode)
-            if newNode.board.move(Move.RIGHT) == True:
-                self.fringe.push(newNode)
+            self.tryAddToFringe(currNode, Move.UP)
+            self.tryAddToFringe(currNode, Move.DOWN)
+            self.tryAddToFringe(currNode, Move.LEFT)
+            self.tryAddToFringe(currNode, Move.RIGHT)
         elif self.algType == 'dfs':
             # push children in reverse UDLR order
-            newNode = Node(currNode.board)
-            if newNode.board.move(Move.RIGHT) == True:
-                self.fringe.push(newNode)
-            if newNode.board.move(Move.LEFT) == True:
-                self.fringe.push(newNode)
-            if newNode.board.move(Move.DOWN) == True:
-                self.fringe.push(newNode)
-            if newNode.board.move(Move.UP) == True:
-                self.fringe.push(newNode)
+            self.tryAddToFringe(currNode, Move.RIGHT)
+            self.tryAddToFringe(currNode, Move.LEFT)
+            self.tryAddToFringe(currNode, Move.DOWN)
+            self.tryAddToFringe(currNode, Move.UP)
 
     def run(self):
         result = False
         cnt = 0
+        
         while not self.fringe.isEmpty() and result == False and cnt < 10:
-            print("In a loop")
+            # print("In a loop")
             cnt = cnt + 1
+            print("Step: ", cnt)
             currNode = self.fringe.pop()
             currNode.visited = True
+            # print(currNode.board.key, currNode.visited)
             self.explored[currNode.board.key] = currNode
             
             # print(currNode.state)
             
             # check if the goal is reached
             if currNode.board.goalTest():
+                print("Success")
                 result = True
 
             # expand and add neighbors to the fringe
             self.expand(currNode)
     
-            
+        print("Failure")
 
         slOut = Solver.SolverOutput()
         slOut.pathToGoal = [ 'Bag', 'Wuss' ]
@@ -242,10 +252,12 @@ print("b3: ", b.goalTest())
 #===============================================================================
 
 # execute algorithm
+print("==================================================")
 initState = Board(list(map(int, gInitState)))
 solver = Solver(gAlg, initState)
 slOut = solver.run()
-print("Solver output: ", slOut.pathToGoal)
+print("==================================================")
+# print("Solver output: ", slOut.pathToGoal)
 fileStr = PrepareFile(slOut)
 
 # algSel = { "bfs" : BfsSearch,
