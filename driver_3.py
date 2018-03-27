@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-import sys;
+import os
+import sys
+# TODO_SUBMIT: uncomment resource
+# import resource
+import time
+import psutil
 
 # get command line arguments
 gAlg = sys.argv[1];
@@ -33,17 +38,17 @@ class Queue(Fringe):
     def push(self, item):
         self.dict[item.board.key] = True
         self.items.insert(0, item)
-        print("Push: ", item.board.key, id(item))
-        print("Fringe contents after push: ")
-        for x in self.items:
-            print(x.board)
+        # print("Push: ", item.board.key)
+        # print("Fringe contents after push: ")
+        # for x in self.items:
+            # print(x.board.key)
     def pop(self):
-        print("Fringe contents before pop: ")
-        for x in self.items:
-            print(x.board.key)
+        # print("Fringe contents before pop: ")
+        # for x in self.items:
+            # print(x.board.key)
         item = self.items.pop()
         del self.dict[item.board.key]
-        print("Pop: ", item.board.key)
+        # print("Pop: ", item.board.key)
         return item
     def isEmpty(self):
         return self.items == []
@@ -56,6 +61,7 @@ class PrioQueue(Fringe):
 
 class Board:
     GOAL_STATE = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    GOAL_KEY = '012345678'
     def makeKey(state):
         key = ""
         for x in state:
@@ -63,15 +69,20 @@ class Board:
         return key
     def __init__(self, state):
         # state: list of integers
-        self.state = state
+        self.state = list(state)
         self.key = Board.makeKey(state)
     def goalTest(self):
         if len(self.state) != 9:
             return False
-        for idx in range(len(self.state)):
-            if self.state[idx] != Board.GOAL_STATE[idx]:
-                return False
-        return True
+        # print("Check: ", self.key, "Goal: ", Board.GOAL_KEY)
+        if self.key == Board.GOAL_KEY:
+            return True
+        else:
+            return False
+        # for idx in range(len(self.state)):
+            # if self.state[idx] != Board.GOAL_STATE[idx]:
+                # return False
+        # return True
     def move(self, dir):
         idxZ = self.state.index(0)
         if dir == Move.UP:
@@ -95,7 +106,7 @@ class Board:
             else:
                 return False
         elif dir == Move.LEFT:
-            if idxZ % 3 == 0:
+            if idxZ % 3 != 0:
                 idxNew = idxZ - 1
                 tmp = self.state[idxNew]
                 self.state[idxNew] = 0
@@ -105,7 +116,7 @@ class Board:
             else:
                 return False
         elif dir == Move.RIGHT:
-            if idxZ % 3 == 2:
+            if idxZ % 3 != 2:
                 idxNew = idxZ + 1
                 tmp = self.state[idxNew]
                 self.state[idxNew] = 0
@@ -117,10 +128,12 @@ class Board:
 
 class Node:
     def __init__(self, board):
-        self.board = board
+        self.board = Board(board.state)
         self.cost = 0
         self.visited = False
         self.parent = None
+        self.stepFromParent = None
+        self.depth = 0
 
 class State:
     def __init__(self, algType, startBoard):
@@ -145,16 +158,26 @@ class Solver(State):
     class SolverOutput:
         pass
 
-    def __init__(self, algType, startNode):
-        super().__init__(algType, startNode)
+    def __init__(self, algType, startBoard):
+        super().__init__(algType, startBoard)
+        self.maxDepth = 0
     def tryAddToFringe(self, currNode, move):
         newNode = Node(currNode.board)
+        # print("Moving ", move, "from ", newNode.board.key)
         if newNode.board.move(move) == True:
+            # print("Attempt adding to fringe: ", newNode.board.key)
             if not (newNode.board.key in self.fringe.dict) and\
                not (newNode.board.key in self.explored):
-                print("New node: ", newNode.board.key)
+                # print("New node: ", newNode.board.key)
+                newNode.parent = currNode
+                newNode.stepFromParent = move
+                newNode.depth = currNode.depth + 1
+                if newNode.depth > self.maxDepth:
+                    self.maxDepth = newNode.depth
                 self.fringe.push(newNode)
                 # print(newNode.board.key, "added to fringe")
+            # else:
+                # print(newNode.board.key, "not added to fringe")
 
     def expand(self, currNode):
         if self.algType == 'bfs':
@@ -173,11 +196,15 @@ class Solver(State):
     def run(self):
         result = False
         cnt = 0
+        nodesExpanded = 0
+        startTime = time.time()
+        maxMemUsage = 0
         
-        while not self.fringe.isEmpty() and result == False and cnt < 10:
+        print("Running...")       
+        while not self.fringe.isEmpty() and result == False and cnt < 1000000:
             # print("In a loop")
             cnt = cnt + 1
-            print("Step: ", cnt)
+            # print("Step: ", cnt)
             currNode = self.fringe.pop()
             currNode.visited = True
             # print(currNode.board.key, currNode.visited)
@@ -187,23 +214,43 @@ class Solver(State):
             
             # check if the goal is reached
             if currNode.board.goalTest():
-                print("Success")
                 result = True
 
             # expand and add neighbors to the fringe
-            self.expand(currNode)
+            if result == False:
+                self.expand(currNode)
+                nodesExpanded = nodesExpanded + 1
+                # currMemUsage = psutil.virtual_memory()
+                # if currMemUsage > maxMemUsage:
+                    # maxMemUsage = currMemUsage
     
-        print("Failure")
-
-        slOut = Solver.SolverOutput()
-        slOut.pathToGoal = [ 'Bag', 'Wuss' ]
-        slOut.costOfGoal = 0
-        slOut.nodesExpanded = 0
-        slOut.searchDepth = 3
-        slOut.maxSearchDepth = 4321
-        slOut.runningTime = 12.34;
-        slOut.maxRamUsage = 3
-        return slOut
+        if result == True:
+# TODO_SUBMIT: uncomment mem usage
+            # maxMemUsage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        
+            # store end time
+            endTime = time.time()
+            # get path
+            pathToGoal = []
+            costOfPath = 0
+            while currNode.parent != None:
+                pathToGoal.insert(0, currNode.stepFromParent)
+                costOfPath = costOfPath + 1
+                currNode = currNode.parent
+        
+            print("Success at step", cnt)
+            slOut = Solver.SolverOutput()
+            slOut.pathToGoal = pathToGoal
+            slOut.costOfPath = costOfPath
+            slOut.nodesExpanded = nodesExpanded
+            slOut.searchDepth = costOfPath
+            slOut.maxSearchDepth = self.maxDepth
+            slOut.runningTime = endTime - startTime;
+            slOut.maxRamUsage = maxMemUsage
+            return slOut
+        else:
+            print("Failure after step limit:", cnt)
+            return False
         
 class PrepareFileParams:
     pass
@@ -223,7 +270,7 @@ def AstSearch(initState):
 def PrepareFile(params):
     fileStr = ""
     fileStr = fileStr + "path_to_goal: " + str(params.pathToGoal) + "\n"
-    fileStr = fileStr + "cost_of_path: " + str(params.costOfGoal) + "\n"
+    fileStr = fileStr + "cost_of_path: " + str(params.costOfPath) + "\n"
     fileStr = fileStr + "nodes_expanded: " + str(params.nodesExpanded) + "\n"
     fileStr = fileStr + "search_depth: " + str(params.searchDepth) + "\n"
     fileStr = fileStr + "max_search_depth: " + str(params.maxSearchDepth) + "\n"
@@ -258,7 +305,14 @@ solver = Solver(gAlg, initState)
 slOut = solver.run()
 print("==================================================")
 # print("Solver output: ", slOut.pathToGoal)
-fileStr = PrepareFile(slOut)
+
+# write output to file
+if slOut != False:
+    fileStr = PrepareFile(slOut)
+    # write to file
+    f = open("output.txt", 'w')
+    f.write(fileStr)
+    f.close()
 
 # algSel = { "bfs" : BfsSearch,
            # "dfs" : DfsSearch,
@@ -272,7 +326,3 @@ fileStr = PrepareFile(slOut)
 # params.runningTime = 1.234
 # fileStr = PrepareFile(params)
 
-# write to file
-f = open("output.txt", 'w')
-f.write(fileStr)
-f.close()
